@@ -112,7 +112,7 @@ index 2ca0167..948aba6 100644
        handleScreenChange,
        handleProviderConnected,
 diff --git a/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue b/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue
-index 152c384..7e499c1 100644
+index 152c384..1657de2 100644
 --- a/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue
 +++ b/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue
 @@ -174,7 +174,91 @@
@@ -124,7 +124,7 @@ index 152c384..7e499c1 100644
 +
 +          <!-- Pinned assistant actions (always present on assistant messages) -->
 +          <div v-if="message.role === 'assistant'" class="assistant-actions-wrap">
-+            <div class="assistant-actions" :class="{ busy: assistantIsBusy }" role="toolbar" aria-label="Assistant message actions">
++            <div ref="assistantBarRef" class="assistant-actions" :class="{ busy: assistantIsBusy }" role="toolbar" aria-label="Assistant message actions">
 +              <button class="assistant-action-btn" data-accent="cyan" type="button" title="Regenerate" :disabled="assistantIsBusy" @click="onAssistantRegenerate">
 +                <span class="i" aria-hidden="true">
 +                  <svg viewBox="0 0 24 24" fill="none">
@@ -229,7 +229,7 @@ index 152c384..7e499c1 100644
  </head><body><canvas id="chart"></canvas><script>
  try{const config=${sourceCode};
  config.options=config.options||{};config.options.responsive=true;config.options.maintainAspectRatio=true;
-@@ -2811,6 +2898,107 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
+@@ -2811,6 +2898,109 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
        window.open(url, '_blank');
      };
  
@@ -249,8 +249,10 @@ index 152c384..7e499c1 100644
 +    };
 +
 +    // Trigger glow + vibration feedback on the entire bar
++    const assistantBarRef = ref(null);
++
 +    const triggerBarFeedback = () => {
-+      const bar = document.querySelector('.assistant-actions');
++      const bar = assistantBarRef.value;
 +      if (!bar) return;
 +      // Remove existing animation class to allow re-triggering
 +      bar.classList.remove('bar-feedback');
@@ -259,13 +261,13 @@ index 152c384..7e499c1 100644
 +      bar.classList.add('bar-feedback');
 +      // Haptic vibration if available (mobile)
 +      if (navigator.vibrate) {
-+        navigator.vibrate(30);
++        navigator.vibrate([15, 30, 15]);
 +      }
 +      // Clean up after animation
 +      clearTimeout(triggerBarFeedback._t);
 +      triggerBarFeedback._t = setTimeout(() => {
 +        bar.classList.remove('bar-feedback');
-+      }, 400);
++      }, 450);
 +    };
 +
 +    const onAssistantRegenerate = () => {
@@ -337,13 +339,13 @@ index 152c384..7e499c1 100644
      return {
        messageRef,
        reasoningContentRef,
-@@ -2874,6 +3062,16 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
+@@ -2874,6 +3064,16 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
        copyShareLink,
        copyEmbedCode,
        openInBrowser,
-+      // Assistant actions strip
-+      assistantIsBusy,
++      // Assistant actions strip      assistantIsBusy,
 +      assistantActionNote,
++      assistantBarRef,
 +      triggerBarFeedback,
 +      onAssistantRegenerate,
 +      onAssistantCopy,
@@ -354,7 +356,7 @@ index 152c384..7e499c1 100644
      };
    },
  };
-@@ -3196,6 +3394,221 @@ span.nodeLabel p {
+@@ -3196,6 +3396,229 @@ span.nodeLabel p {
    padding: 0 4px;
  }
  
@@ -411,29 +413,37 @@ index 152c384..7e499c1 100644
 +      0 10px 30px rgba(0, 0, 0, 0.25),
 +      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
 +      0 0 0 0 rgba(18, 224, 255, 0);
-+    transform: scale(1);
++    transform: scale(1) translateX(0);
 +  }
-+  15% {
++  10% {
 +    box-shadow:
 +      0 10px 30px rgba(0, 0, 0, 0.25),
 +      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
 +      0 0 20px 4px rgba(18, 224, 255, 0.35),
 +      0 0 40px 8px rgba(229, 61, 143, 0.15);
-+    transform: scale(1.015);
++    transform: scale(1.02) translateX(-1px);
++  }
++  25% {
++    box-shadow:
++      0 10px 30px rgba(0, 0, 0, 0.25),
++      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
++      0 0 16px 3px rgba(18, 224, 255, 0.25),
++      0 0 30px 6px rgba(229, 61, 143, 0.1);
++    transform: scale(1.01) translateX(1px);
 +  }
 +  40% {
 +    box-shadow:
 +      0 10px 30px rgba(0, 0, 0, 0.25),
 +      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
 +      0 0 12px 2px rgba(18, 224, 255, 0.2);
-+    transform: scale(1.005);
++    transform: scale(1.005) translateX(0);
 +  }
 +  100% {
 +    box-shadow:
 +      0 10px 30px rgba(0, 0, 0, 0.25),
 +      0 0 0 1px rgba(255, 255, 255, 0.03) inset,
 +      0 0 0 0 rgba(18, 224, 255, 0);
-+    transform: scale(1);
++    transform: scale(1) translateX(0);
 +  }
 +}
 +

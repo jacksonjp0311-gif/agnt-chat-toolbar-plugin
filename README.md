@@ -327,6 +327,15 @@ MIT License. See [LICENSE](./LICENSE) for full text.
 
 ## Changelog
 
+### v1.1.0 (2026-06-17)
+
+- **Native Share**: Share button now uses `navigator.share()` with title + text + URL for rich native share sheets on mobile/desktop
+- **Glow + Shake Animation**: Entire bar glows with cyan→pink neon pulse and subtle horizontal shake on any button click
+- **Haptic Feedback**: Short vibration pattern on mobile devices via `navigator.vibrate()`
+- **Scoped Feedback**: Each bar's glow is scoped to its component ref (fixes bug where only the first bar animated)
+- Updated patch file
+- Updated ChatToolbar.vue adapter component
+
 ### v1.0.0 (2026-06-17)
 
 - Initial release

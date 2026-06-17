@@ -1,6 +1,6 @@
 <template>
   <div v-if="message.role === 'assistant'" class="chat-toolbar-wrap">
-    <div class="chat-toolbar" role="toolbar" aria-label="Message actions">
+    <div ref="barRef" class="chat-toolbar" role="toolbar" aria-label="Message actions">
       <!-- Regenerate -->
       <button class="chat-toolbar-btn" data-accent="cyan" type="button" title="Regenerate" :disabled="isBusy" @click="onRegenerate">
         <span class="btn-icon" aria-hidden="true">
@@ -91,17 +91,36 @@ export default {
       } catch { flashNote('Copy failed'); }
     };
 
+    const barRef = ref(null);
+
+    const triggerBarFeedback = () => {
+      const bar = barRef.value;
+      if (!bar) return;
+      bar.classList.remove('bar-feedback');
+      void bar.offsetWidth;
+      bar.classList.add('bar-feedback');
+      if (navigator.vibrate) navigator.vibrate([15, 30, 15]);
+      clearTimeout(triggerBarFeedback._t);
+      triggerBarFeedback._t = setTimeout(() => bar.classList.remove('bar-feedback'), 450);
+    };
+
     const onShare = async () => {
       const text = String(props.message?.content || '');
+      triggerBarFeedback();
       try {
         if (navigator.share) {
-          await navigator.share({ title: 'AGNT Output', text: text.slice(0, 4000) });
+          const shareData = { title: 'AGNT Output', text: text.slice(0, 4000) };
+          if (window.location?.href) shareData.url = window.location.href;
+          await navigator.share(shareData);
           flashNote('Shared');
         } else {
-          await navigator.clipboard.writeText(text);
-          flashNote('Copied');
+          const shareText = window.location?.href ? `${text.slice(0, 4000)}\n\n— Shared from AGNT: ${window.location.href}` : text;
+          await navigator.clipboard.writeText(shareText);
+          flashNote('Copied to clipboard');
         }
-      } catch { flashNote('Share canceled'); }
+      } catch (e) {
+        flashNote(e?.name === 'NotAllowedError' ? 'Share dismissed' : 'Share failed');
+      }
     };
 
     const onCopyConversation = () => {
@@ -119,7 +138,7 @@ export default {
       flashNote(vote === 'up' ? 'Thanks' : 'Noted');
     };
 
-    return { isBusy, actionNote, onRegenerate, onCopy, onShare, onCopyConversation, onGenerateArtifact, onFeedback };
+    return { isBusy, actionNote, barRef, onRegenerate, onCopy, onShare, onCopyConversation, onGenerateArtifact, onFeedback };
   },
 };
 </script>
@@ -146,7 +165,7 @@ export default {
   box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition: background var(--transition-fast, 150ms ease-in-out), border-color var(--transition-fast, 150ms ease-in-out);
+  transition: background var(--transition-fast, 150ms ease-in-out), border-color var(--transition-fast, 150ms ease-in-out), box-shadow var(--transition-fast, 150ms ease-in-out), transform var(--transition-fast, 150ms ease-in-out);
   position: relative;
   overflow: hidden;
   isolation: isolate;
@@ -222,6 +241,33 @@ export default {
   margin: 0 2px;
   position: relative;
   z-index: 1;
+}
+
+.chat-toolbar.bar-feedback {
+  animation: bar-glow 450ms ease-out;
+}
+
+@keyframes bar-glow {
+  0% {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 0 0 rgba(18, 224, 255, 0);
+    transform: scale(1) translateX(0);
+  }
+  10% {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 20px 4px rgba(18, 224, 255, 0.35), 0 0 40px 8px rgba(229, 61, 143, 0.15);
+    transform: scale(1.02) translateX(-1px);
+  }
+  25% {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 16px 3px rgba(18, 224, 255, 0.25), 0 0 30px 6px rgba(229, 61, 143, 0.1);
+    transform: scale(1.01) translateX(1px);
+  }
+  40% {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 12px 2px rgba(18, 224, 255, 0.2);
+    transform: scale(1.005) translateX(0);
+  }
+  100% {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 0 0 rgba(18, 224, 255, 0);
+    transform: scale(1) translateX(0);
+  }
 }
 
 .chat-toolbar-spacer { flex: 1; }
