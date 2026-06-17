@@ -1,6 +1,6 @@
 # AGNT Chat Toolbar Plugin
 
-Pinned, theme-aware action strip for AGNT assistant messages — **Regenerate**, **Copy**, **Share/Upload**, and **Thumbs Up/Down** — designed to match AGNT’s neon palette across themes.
+Pinned, theme-aware action strip for AGNT assistant messages — **Regenerate**, **Copy**, **Share/Upload**, **Copy Conversation (α)**, and **Thumbs Up/Down** — designed to match AGNT’s neon palette across themes (including theme switching).
 
 This project ships two deliverables:
 
@@ -16,7 +16,7 @@ This project ships two deliverables:
 - **Pinned under assistant messages** (always visible)
 - **Semi-translucent glass** + **darkens on hover**
 - Uses **AGNT theme variables** (e.g. `--color-background-rgb`, `--color-text-muted`, etc.)
-- Futuristic neon accent hover states (cyan/pink/green/gold/violet)
+- Futuristic neon accent hover states using AGNT tokens (primary pink / secondary cyan / success green / warning yellow / indigo)
 - Works across:
   - Main orchestrator chat
   - Unified chats (agent/workflow/tool/widget/artifact panels)
