@@ -1,5 +1,5 @@
 diff --git a/frontend/src/views/Terminal/CenterPanel/screens/Chat/Chat.vue b/frontend/src/views/Terminal/CenterPanel/screens/Chat/Chat.vue
-index 2ca0167..69ca6a3 100644
+index 2ca0167..948aba6 100644
 --- a/frontend/src/views/Terminal/CenterPanel/screens/Chat/Chat.vue
 +++ b/frontend/src/views/Terminal/CenterPanel/screens/Chat/Chat.vue
 @@ -130,6 +130,7 @@
@@ -10,7 +10,7 @@ index 2ca0167..69ca6a3 100644
                    />
                  </template>
                </TransitionGroup>
-@@ -1083,6 +1084,39 @@ export default {
+@@ -1083,6 +1084,92 @@ export default {
        });
      };
  
@@ -41,6 +41,59 @@ index 2ca0167..69ca6a3 100644
 +        return;
 +      }
 +
++      if (action === 'copy-conversation') {
++        try {
++          const msgs = displayMessages.value || [];
++          const lines = [];
++          for (const m of msgs) {
++            if (!m || !m.role) continue;
++            const role = String(m.role).toUpperCase();
++            const body = String(m.content || '').trim();
++            if (!body) continue;
++            lines.push(`### ${role}\n${body}`);
++          }
++          const text = lines.join('\n\n---\n\n');
++          await navigator.clipboard.writeText(text);
++        } catch (e) {
++          console.warn('[Chat] Copy conversation failed:', e);
++        }
++        return;
++      }
++
++      if (action === 'generate-artifact') {
++        try {
++          const msgs = displayMessages.value || [];
++          const lines = [];
++          for (const m of msgs) {
++            if (!m || !m.role) continue;
++            const role = String(m.role).toUpperCase();
++            const body = String(m.content || '').trim();
++            if (!body) continue;
++            lines.push(`### ${role}\n${body}`);
++          }
++          const text = lines.join('\n\n---\n\n');
++          const artifact = {
++            kind: 'conversation',
++            title: 'Conversation Artifact',
++            content: text,
++            timestamp: Date.now(),
++            source: 'chat-toolbar'
++          };
++          const blob = new Blob([JSON.stringify(artifact, null, 2)], { type: 'application/json' });
++          const url = URL.createObjectURL(blob);
++          const a = document.createElement('a');
++          a.href = url;
++          a.download = `conversation-artifact-${Date.now()}.json`;
++          document.body.appendChild(a);
++          a.click();
++          document.body.removeChild(a);
++          URL.revokeObjectURL(url);
++        } catch (e) {
++          console.warn('[Chat] Generate artifact failed:', e);
++        }
++        return;
++      }
++
 +      if (action === 'feedback') {
 +        console.log('[Chat] Assistant feedback:', { messageId, vote });
 +        return;
@@ -50,7 +103,7 @@ index 2ca0167..69ca6a3 100644
      // Stream event handler. Monitoring state (counters, token/cache stats,
      // activity feed, context status) is always routed to the SOURCE
      // conversation's slot via `streamConvId` — so per-conversation history
-@@ -2329,6 +2363,7 @@ export default {
+@@ -2329,6 +2416,7 @@ export default {
        clearActivities,
        handleUserInputSubmit,
        handleEditMessage,
@@ -59,10 +112,10 @@ index 2ca0167..69ca6a3 100644
        handleScreenChange,
        handleProviderConnected,
 diff --git a/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue b/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue
-index 152c384..048b6c9 100644
+index 152c384..759fe36 100644
 --- a/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue
 +++ b/frontend/src/views/Terminal/CenterPanel/screens/Chat/components/MessageItem.vue
-@@ -174,7 +174,76 @@
+@@ -174,7 +174,91 @@
              <span v-for="data in message.metadata" :key="data" class="metadata-tag">
                {{ data }}
              </span>
@@ -96,6 +149,21 @@ index 152c384..048b6c9 100644
 +                    <path d="M12 3v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
 +                    <path d="M8 7l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
 +                    <path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
++                  </svg>
++                </span>
++              </button>
++
++              <!-- Copy entire conversation (α) -->
++              <button class="assistant-action-btn" data-accent="indigo" type="button" title="Copy conversation" @click="onAssistantCopyConversation">
++                <span class="i alpha-glyph" aria-hidden="true">α</span>
++              </button>
++
++              <!-- Generate artifact (▶▶) -->
++              <button class="assistant-action-btn" data-accent="orange" type="button" title="Generate artifact" @click="onAssistantGenerateArtifact">
++                <span class="i artifact-glyph" aria-hidden="true">
++                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
++                    <path d="M5 3l9 9-9 9V3z" />
++                    <path d="M13 8l5 5-5 5V8z" opacity="0.6" />
 +                  </svg>
 +                </span>
 +              </button>
@@ -140,7 +208,7 @@ index 152c384..048b6c9 100644
          ><!-- end v-else (non-editing mode) -->
        </div>
        <span class="message-time">{{ formatTime(message.timestamp) }}</span>
-@@ -583,7 +652,8 @@ export default {
+@@ -583,7 +667,8 @@ export default {
        default: false,
      },
    },
@@ -150,7 +218,7 @@ index 152c384..048b6c9 100644
    setup(props, { emit }) {
      // Get Vuex store for auth token
      const store = useStore();
-@@ -972,7 +1042,9 @@ export default {
+@@ -972,7 +1057,9 @@ export default {
        if (type === 'chartjs') {
          return `<!DOCTYPE html><html><head><meta charset="utf-8">
  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"><\/script>
@@ -161,7 +229,7 @@ index 152c384..048b6c9 100644
  </head><body><canvas id="chart"></canvas><script>
  try{const config=${sourceCode};
  config.options=config.options||{};config.options.responsive=true;config.options.maintainAspectRatio=true;
-@@ -2811,6 +2883,56 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
+@@ -2811,6 +2898,66 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
        window.open(url, '_blank');
      };
  
@@ -210,6 +278,16 @@ index 152c384..048b6c9 100644
 +      }
 +    };
 +
++    const onAssistantCopyConversation = () => {
++      emit('assistant-action', { action: 'copy-conversation', messageId: props.message?.id });
++      flashAssistantNote('Copying…');
++    };
++
++    const onAssistantGenerateArtifact = () => {
++      emit('assistant-action', { action: 'generate-artifact', messageId: props.message?.id });
++      flashAssistantNote('Generating artifact…');
++    };
++
 +    const onAssistantFeedback = (vote) => {
 +      emit('assistant-action', { action: 'feedback', vote, messageId: props.message?.id });
 +      flashAssistantNote(vote === 'up' ? 'Thanks' : 'Noted');
@@ -218,7 +296,7 @@ index 152c384..048b6c9 100644
      return {
        messageRef,
        reasoningContentRef,
-@@ -2874,6 +2996,13 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
+@@ -2874,6 +3021,15 @@ ${sourceCode.replace(/^\s*import\s+.*?from\s+['"][^'"]*['"];?\s*$/gm, '').replac
        copyShareLink,
        copyEmbedCode,
        openInBrowser,
@@ -228,11 +306,13 @@ index 152c384..048b6c9 100644
 +      onAssistantRegenerate,
 +      onAssistantCopy,
 +      onAssistantShare,
++      onAssistantCopyConversation,
++      onAssistantGenerateArtifact,
 +      onAssistantFeedback,
      };
    },
  };
-@@ -3196,6 +3325,162 @@ span.nodeLabel p {
+@@ -3196,6 +3352,184 @@ span.nodeLabel p {
    padding: 0 4px;
  }
  
@@ -329,16 +409,18 @@ index 152c384..048b6c9 100644
 +  opacity: 0.22;
 +}
 +
-+.assistant-action-btn[data-accent="cyan"] { --accent: var(--color-blue, var(--color-primary, #12e0ff)); }
-+.assistant-action-btn[data-accent="pink"] { --accent: var(--color-pink, #e53d8f); }
-+.assistant-action-btn[data-accent="green"] { --accent: var(--color-green, #19ef83); }
-+.assistant-action-btn[data-accent="gold"] { --accent: var(--color-yellow, #ffd700); }
-+.assistant-action-btn[data-accent="violet"] { --accent: var(--color-violet, var(--color-secondary, #7d3de5)); }
++.assistant-action-btn[data-accent="cyan"] { --accent: var(--color-secondary, var(--color-blue, #12e0ff)); }
++.assistant-action-btn[data-accent="pink"] { --accent: var(--color-primary, var(--color-pink, #e53d8f)); }
++.assistant-action-btn[data-accent="green"] { --accent: var(--color-success, var(--color-green, #19ef83)); }
++.assistant-action-btn[data-accent="gold"] { --accent: var(--color-warning, var(--color-yellow, #ffd700)); }
++.assistant-action-btn[data-accent="violet"] { --accent: var(--color-violet, var(--color-indigo, var(--color-secondary, #7d3de5))); }
++.assistant-action-btn[data-accent="indigo"] { --accent: var(--color-indigo, #7d3de5); }
++.assistant-action-btn[data-accent="orange"] { --accent: var(--color-warning, var(--color-orange, #ff9500)); }
 +
 +.assistant-action-btn:hover {
 +  opacity: 1 !important;
-+  background: rgba(255, 255, 255, 0.10);
-+  border-color: rgba(255, 255, 255, 0.12);
++  background: var(--color-lighter-0, rgba(255, 255, 255, 0.10));
++  border-color: var(--color-lighter-1, rgba(255, 255, 255, 0.20));
 +  color: rgba(255, 255, 255, 0.92) !important;
 +  transform: translateY(-1px);
 +}
@@ -364,6 +446,26 @@ index 152c384..048b6c9 100644
 +}
 +
 +.assistant-action-btn svg {
++  width: 18px;
++  height: 18px;
++}
++
++.alpha-glyph {
++  font-family: var(--font-family-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);
++  font-size: 18px;
++  font-weight: 600;
++  line-height: 1;
++  transform: translateY(-1px);
++}
++
++.artifact-glyph {
++  display: grid;
++  place-items: center;
++  width: 100%;
++  height: 100%;
++}
++
++.artifact-glyph svg {
 +  width: 18px;
 +  height: 18px;
 +}
@@ -396,7 +498,7 @@ index 152c384..048b6c9 100644
    color: var(--color-text-muted);
    display: none;
 diff --git a/frontend/src/views/_components/chat/UnifiedChatContainer.vue b/frontend/src/views/_components/chat/UnifiedChatContainer.vue
-index 6412c42..049acd0 100644
+index 6412c42..cb41149 100644
 --- a/frontend/src/views/_components/chat/UnifiedChatContainer.vue
 +++ b/frontend/src/views/_components/chat/UnifiedChatContainer.vue
 @@ -31,6 +31,7 @@
@@ -407,7 +509,7 @@ index 6412c42..049acd0 100644
            />
          </TransitionGroup>
  
-@@ -426,6 +427,40 @@ export default {
+@@ -426,6 +427,93 @@ export default {
        focusInput();
      };
  
@@ -439,6 +541,59 @@ index 6412c42..049acd0 100644
 +        return;
 +      }
 +
++      if (action === 'copy-conversation') {
++        try {
++          const msgs = formattedMessages.value || [];
++          const lines = [];
++          for (const m of msgs) {
++            if (!m || !m.role) continue;
++            const role = String(m.role).toUpperCase();
++            const body = String(m.content || '').trim();
++            if (!body) continue;
++            lines.push(`### ${role}\n${body}`);
++          }
++          const text = lines.join('\n\n---\n\n');
++          await navigator.clipboard.writeText(text);
++        } catch (e) {
++          console.warn('[UnifiedChatContainer] Copy conversation failed:', e);
++        }
++        return;
++      }
++
++      if (action === 'generate-artifact') {
++        try {
++          const msgs = formattedMessages.value || [];
++          const lines = [];
++          for (const m of msgs) {
++            if (!m || !m.role) continue;
++            const role = String(m.role).toUpperCase();
++            const body = String(m.content || '').trim();
++            if (!body) continue;
++            lines.push(`### ${role}\n${body}`);
++          }
++          const text = lines.join('\n\n---\n\n');
++          const artifact = {
++            kind: 'conversation',
++            title: 'Conversation Artifact',
++            content: text,
++            timestamp: Date.now(),
++            source: 'chat-toolbar'
++          };
++          const blob = new Blob([JSON.stringify(artifact, null, 2)], { type: 'application/json' });
++          const url = URL.createObjectURL(blob);
++          const a = document.createElement('a');
++          a.href = url;
++          a.download = `conversation-artifact-${Date.now()}.json`;
++          document.body.appendChild(a);
++          a.click();
++          document.body.removeChild(a);
++          URL.revokeObjectURL(url);
++        } catch (e) {
++          console.warn('[UnifiedChatContainer] Generate artifact failed:', e);
++        }
++        return;
++      }
++
 +      if (action === 'feedback') {
 +        handleFrontendEvent('assistant-feedback', { channelKey: props.channelKey, chatType: props.chatType, messageId, vote });
 +        return;
@@ -448,7 +603,7 @@ index 6412c42..049acd0 100644
      const getStatusFor = (message) => {
        if (!message || message.role !== 'assistant') return null;
        return store.getters['chatUnified/getMessageStatus'](props.channelKey, message.id);
-@@ -521,6 +556,7 @@ export default {
+@@ -521,6 +609,7 @@ export default {
        onDrop,
        onToggleTool,
        onEditMessage,
