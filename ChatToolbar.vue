@@ -1,6 +1,6 @@
 <template>
   <div v-if="message.role === 'assistant'" class="chat-toolbar-wrap">
-    <div ref="barRef" class="chat-toolbar" role="toolbar" aria-label="Message actions">
+    <div class="chat-toolbar" :class="{ 'bar-glow': isGlowing }" role="toolbar" aria-label="Message actions">
       <!-- Regenerate -->
       <button class="chat-toolbar-btn" data-accent="cyan" type="button" title="Regenerate" :disabled="isBusy" @click="onRegenerate">
         <span class="btn-icon" aria-hidden="true">
@@ -15,7 +15,7 @@
         </span>
       </button>
 
-      <!-- Share / Upload -->
+      <!-- Share / Upload — uses native Web Share API -->
       <button class="chat-toolbar-btn" data-accent="green" type="button" title="Share / Upload" @click="onShare">
         <span class="btn-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8 7l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 14v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -24,13 +24,16 @@
 
       <!-- Copy Conversation (α) -->
       <button class="chat-toolbar-btn" data-accent="indigo" type="button" title="Copy conversation" @click="onCopyConversation">
-        <span class="btn-icon alpha-icon" aria-hidden="true">α</span>
+        <span class="btn-icon alpha-icon" aria-hidden="true">&#x03B1;</span>
       </button>
 
-      <!-- Generate Artifact (▶▶) -->
+      <!-- Generate Artifact: sleek double-triangle (outer + inner) -->
       <button class="chat-toolbar-btn" data-accent="orange" type="button" title="Generate artifact" @click="onGenerateArtifact">
         <span class="btn-icon artifact-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 3l9 9-9 9V3z"/><path d="M13 8l5 5-5 5V8z" opacity="0.6"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+            <path d="M5 3l9 9-9 9V3z"/>
+            <path d="M13 8l5 5-5 5V8z" opacity="0.55"/>
+          </svg>
         </span>
       </button>
 
@@ -73,72 +76,80 @@ export default {
     });
 
     const actionNote = ref('');
+    const isGlowing = ref(false);
+
     const flashNote = (msg) => {
       actionNote.value = msg || '';
       clearTimeout(flashNote._t);
       flashNote._t = setTimeout(() => { actionNote.value = ''; }, 1400);
     };
 
+    // Trigger haptic vibration + visual glow on any button click
+    const triggerGlow = () => {
+      if (navigator.vibrate) navigator.vibrate([15, 30, 15]);
+      isGlowing.value = true;
+      clearTimeout(triggerGlow._t);
+      triggerGlow._t = setTimeout(() => { isGlowing.value = false; }, 400);
+    };
+
+    const emitAction = (payload) => {
+      triggerGlow();
+      emit('assistant-action', payload);
+    };
+
     const onRegenerate = () => {
-      emit('assistant-action', { action: 'regenerate', messageId: props.message?.id });
-      flashNote('Regenerating…');
+      emitAction({ action: 'regenerate', messageId: props.message?.id });
+      flashNote('Regenerating');
     };
 
     const onCopy = async () => {
+      triggerGlow();
       try {
         await navigator.clipboard.writeText(String(props.message?.content || ''));
         flashNote('Copied');
       } catch { flashNote('Copy failed'); }
     };
 
-    const barRef = ref(null);
-
-    const triggerBarFeedback = () => {
-      const bar = barRef.value;
-      if (!bar) return;
-      bar.classList.remove('bar-feedback');
-      void bar.offsetWidth;
-      bar.classList.add('bar-feedback');
-      if (navigator.vibrate) navigator.vibrate([15, 30, 15]);
-      clearTimeout(triggerBarFeedback._t);
-      triggerBarFeedback._t = setTimeout(() => bar.classList.remove('bar-feedback'), 450);
-    };
-
+    // Native share: uses Web Share API with title+text+URL, falls back to clipboard
     const onShare = async () => {
+      triggerGlow();
+      const title = 'AGNT Output';
       const text = String(props.message?.content || '');
-      triggerBarFeedback();
+      const url = window.location.href;
       try {
         if (navigator.share) {
-          const shareData = { title: 'AGNT Output', text: text.slice(0, 4000) };
-          if (window.location?.href) shareData.url = window.location.href;
-          await navigator.share(shareData);
+          await navigator.share({ title, text, url });
           flashNote('Shared');
         } else {
-          const shareText = window.location?.href ? `${text.slice(0, 4000)}\n\n— Shared from AGNT: ${window.location.href}` : text;
-          await navigator.clipboard.writeText(shareText);
-          flashNote('Copied to clipboard');
+          // Fallback: copy shareable text+URL to clipboard
+          await navigator.clipboard.writeText(title + '\n\n' + text + '\n\n' + url);
+          flashNote('Link copied');
         }
-      } catch (e) {
-        flashNote(e?.name === 'NotAllowedError' ? 'Share dismissed' : 'Share failed');
+      } catch {
+        // User cancelled or unsupported
+        flashNote('Share canceled');
       }
     };
 
     const onCopyConversation = () => {
-      emit('assistant-action', { action: 'copy-conversation', messageId: props.message?.id });
-      flashNote('Copying…');
+      emitAction({ action: 'copy-conversation', messageId: props.message?.id });
+      flashNote('Copying');
     };
 
     const onGenerateArtifact = () => {
-      emit('assistant-action', { action: 'generate-artifact', messageId: props.message?.id });
-      flashNote('Generating…');
+      emitAction({ action: 'generate-artifact', messageId: props.message?.id });
+      flashNote('Generating');
     };
 
     const onFeedback = (vote) => {
-      emit('assistant-action', { action: 'feedback', vote, messageId: props.message?.id });
+      emitAction({ action: 'feedback', vote, messageId: props.message?.id });
       flashNote(vote === 'up' ? 'Thanks' : 'Noted');
     };
 
-    return { isBusy, actionNote, barRef, onRegenerate, onCopy, onShare, onCopyConversation, onGenerateArtifact, onFeedback };
+    return {
+      isBusy, actionNote, isGlowing,
+      onRegenerate, onCopy, onShare, onCopyConversation, onGenerateArtifact, onFeedback,
+    };
   },
 };
 </script>
@@ -165,17 +176,59 @@ export default {
   box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition: background var(--transition-fast, 150ms ease-in-out), border-color var(--transition-fast, 150ms ease-in-out), box-shadow var(--transition-fast, 150ms ease-in-out), transform var(--transition-fast, 150ms ease-in-out);
+  transition: background var(--transition-fast, 150ms ease-in-out), border-color var(--transition-fast, 150ms ease-in-out), box-shadow var(--transition-fast, 150ms ease-in-out);
   position: relative;
   overflow: hidden;
   isolation: isolate;
 }
 
+/* Subtle neon sweep overlay */
+.chat-toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(600px 80px at 15% 0%, rgba(18, 224, 255, 0.08), transparent 60%),
+    radial-gradient(500px 100px at 85% 100%, rgba(229, 61, 143, 0.06), transparent 65%);
+  mix-blend-mode: screen;
+  opacity: 0.8;
+}
+
+/* Darken on hover (requested) */
 .chat-toolbar:hover {
   background: rgba(var(--bg-rgb), 0.40);
   border-color: var(--color-lighter-2, rgba(255, 255, 255, 0.2));
 }
 
+/* Glow + shake animation on button click */
+.chat-toolbar.bar-glow {
+  animation: bar-glow-pulse 400ms ease-out;
+}
+
+@keyframes bar-glow-pulse {
+  0% {
+    box-shadow:
+      var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)),
+      0 0 8px rgba(18, 224, 255, 0.15),
+      0 0 24px rgba(18, 224, 255, 0.06);
+    border-color: rgba(18, 224, 255, 0.3);
+  }
+  50% {
+    box-shadow:
+      var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)),
+      0 0 16px rgba(229, 61, 143, 0.18),
+      0 0 40px rgba(229, 61, 143, 0.08);
+    border-color: rgba(229, 61, 143, 0.3);
+  }
+  100% {
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    border-color: var(--color-lighter-1, rgba(255, 255, 255, 0.1));
+  }
+}
+
+/* Per-button glow ring on hover */
 .chat-toolbar-btn {
   width: 30px;
   height: 26px;
@@ -192,6 +245,18 @@ export default {
   transition: transform var(--transition-fast, 150ms ease-in-out), background var(--transition-fast, 150ms ease-in-out), border-color var(--transition-fast, 150ms ease-in-out), color var(--transition-fast, 150ms ease-in-out);
 }
 
+.chat-toolbar-btn::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 12px;
+  background: radial-gradient(circle at 50% 50%, var(--accent, rgba(18, 224, 255, 0.55)) 0%, transparent 55%);
+  opacity: 0;
+  filter: blur(8px);
+  transition: opacity 140ms ease;
+  pointer-events: none;
+}
+
 .chat-toolbar-btn:hover {
   opacity: 1 !important;
   background: var(--color-lighter-0, rgba(255, 255, 255, 0.1));
@@ -200,9 +265,11 @@ export default {
   transform: translateY(-1px);
 }
 
+.chat-toolbar-btn:hover::before { opacity: 0.25; }
 .chat-toolbar-btn:active { transform: translateY(0) scale(0.98); }
 .chat-toolbar-btn:disabled { opacity: 0.45 !important; cursor: not-allowed; }
 
+/* Accent color mappings per AGNT design tokens */
 .chat-toolbar-btn[data-accent="cyan"]   { --accent: var(--color-secondary, var(--color-blue, #12e0ff)); }
 .chat-toolbar-btn[data-accent="pink"]   { --accent: var(--color-primary, var(--color-pink, #e53d8f)); }
 .chat-toolbar-btn[data-accent="green"]  { --accent: var(--color-success, var(--color-green, #19ef83)); }
@@ -241,33 +308,6 @@ export default {
   margin: 0 2px;
   position: relative;
   z-index: 1;
-}
-
-.chat-toolbar.bar-feedback {
-  animation: bar-glow 450ms ease-out;
-}
-
-@keyframes bar-glow {
-  0% {
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 0 0 rgba(18, 224, 255, 0);
-    transform: scale(1) translateX(0);
-  }
-  10% {
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 20px 4px rgba(18, 224, 255, 0.35), 0 0 40px 8px rgba(229, 61, 143, 0.15);
-    transform: scale(1.02) translateX(-1px);
-  }
-  25% {
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 16px 3px rgba(18, 224, 255, 0.25), 0 0 30px 6px rgba(229, 61, 143, 0.1);
-    transform: scale(1.01) translateX(1px);
-  }
-  40% {
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 12px 2px rgba(18, 224, 255, 0.2);
-    transform: scale(1.005) translateX(0);
-  }
-  100% {
-    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1)), 0 0 0 0 rgba(18, 224, 255, 0);
-    transform: scale(1) translateX(0);
-  }
 }
 
 .chat-toolbar-spacer { flex: 1; }
